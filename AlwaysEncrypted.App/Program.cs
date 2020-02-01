@@ -16,6 +16,13 @@ namespace AlwaysEncrypted.App
             Console.ReadLine();
         }
 
+        private static string GetThumbprinOfCertByName(string subjectName)
+        {
+            var certificate = GetCertificatBySubjectName(subjectName);
+            var thumbprint = certificate?.Thumbprint;
+            return thumbprint;
+        }
+
         private static void SetupAlwaysEncryptedColumn()
         {
             //get the tumbprint on button click
@@ -25,20 +32,15 @@ namespace AlwaysEncrypted.App
             var columnEncryptionKey = GetEncryptionKey(thumbprint);
             //create the column encryption key using this value (SQL: CREATE COLUMN ENCRYPTION KEY, use RSA_OAEP)
             //create a column with always encryption on ()SQL: ALTER TABLE USERS)
-        }
-
-        private static string GetThumbprinOfCertByName(string subjectName)
-        {
-            var certificate = GetCertificatBySubjectName(subjectName);
-            var thumbprint = certificate?.Thumbprint;
-            return thumbprint;
-        }
+        }        
 
         private static Certificate.X509Certificate2 GetCertificatBySubjectName(string subject)
         {
+            //open local certification store, that stores the certificates used to generate the machine key
             var store = new X509Store(StoreName.My, StoreLocation.LocalMachine);
             store.Open(OpenFlags.ReadOnly);
             var certificates = store.Certificates;
+            //find the certificate by name
             var matched = certificates.Find(X509FindType.FindBySubjectName, subject, false);
             var certificate = matched.Count > 0 ? matched[0] : null;
             return certificate;
@@ -51,8 +53,11 @@ namespace AlwaysEncrypted.App
             {
                 rng.GetBytes(randomBytes);
             }
+            //get the built in sql certificate store provider
             var provider = new SqlColumnEncryptionCertificateStoreProvider();
+            //get the column master key
             var encryptedKey = provider.EncryptColumnEncryptionKey($"LocalMachine/My/{thumbprint}", "RSA_OAEP", randomBytes);
+            //create encrypted data thats used to create the column encryption key
             var encryptedKeySerialized = "0x" + BitConverter.ToString(encryptedKey).Replace("-", "");
             return encryptedKeySerialized;
         }
